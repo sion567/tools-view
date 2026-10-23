@@ -11,6 +11,42 @@
   --purple: #b07cff;
   --red: #ff6b7a;
   --warn: #f5b657;
+
+  /* 派生色（图表 / 编辑器等跟随主题变化） */
+  --flow-bg: #0d1117;
+  --flow-dot: #2a3348;
+  --edge-stroke: #41506b;
+  --handle: #55647f;
+  --node-bg: #171e2b;
+  --node-border: #2c3547;
+  --node-text: #dbe4f5;
+  --node-shadow: rgba(0, 0, 0, 0.35);
+  --code-text: #c9d4e8;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6fa;
+  --panel: #ffffff;
+  --panel-2: #f0f3f8;
+  --border: #d8dee9;
+  --text: #1f2733;
+  --text-dim: #6b7688;
+  --accent: #2f6fe4;
+  --green: #12a05f;
+  --purple: #7d51d1;
+  --red: #d93a4c;
+  --warn: #b57612;
+
+  --flow-bg: #fbfcfe;
+  --flow-dot: #cbd3e1;
+  --edge-stroke: #a9b4c7;
+  --handle: #97a3b6;
+  --node-bg: #ffffff;
+  --node-border: #d8dee9;
+  --node-text: #1f2733;
+  --node-shadow: rgba(15, 23, 42, 0.12);
+  --code-text: #33405c;
 }
 
 * {
@@ -114,7 +150,13 @@ body {
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: #3d7bf0;
+  filter: brightness(1.08);
+}
+
+.btn.icon {
+  padding: 5px 9px;
+  line-height: 1;
+  font-size: 14px;
 }
 
 .seg {
@@ -204,7 +246,7 @@ body {
   font-size: 12.5px;
   line-height: 1.6;
   white-space: pre;
-  color: #c9d4e8;
+  color: var(--code-text);
 }
 
 .placeholder {
@@ -246,7 +288,7 @@ body {
 .flow-wrap {
   position: absolute;
   inset: 0;
-  background: #0d1117;
+  background: var(--flow-bg);
 }
 
 .flow-empty {
@@ -264,16 +306,16 @@ body {
   width: 190px;
   height: 44px;
   border-radius: 9px;
-  background: var(--panel-2);
-  border: 1px solid #2c3547;
+  background: var(--node-bg);
+  border: 1px solid var(--node-border);
   border-left: 3px solid var(--accent);
   display: flex;
   align-items: center;
   padding: 0 12px;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 12px;
-  color: #dbe4f5;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  color: var(--node-text);
+  box-shadow: 0 2px 10px var(--node-shadow);
 }
 
 .kv-node.kv-object {
@@ -297,7 +339,7 @@ body {
 .kv-node .react-flow__handle.kv-handle {
   width: 7px;
   height: 7px;
-  background: #55647f;
+  background: var(--handle);
   border: none;
 }
 

@@ -4,9 +4,11 @@ import FormatPanel from "./components/FormatPanel";
 import GraphPanel from "./components/GraphPanel";
 import { parseText } from "./lib/parse";
 import { SAMPLES } from "./lib/samples";
+import { useTheme } from "./lib/theme";
 import type { ParseResponse } from "./lib/types";
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
   const [text, setText] = useState("");
   const [response, setResponse] = useState<ParseResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,10 +70,12 @@ export default function App() {
         onFormatClick={handleFormatClick}
         onClear={handleClear}
         onSample={handleSample}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
       <div className="app-bottom">
         <FormatPanel response={response} busy={busy} />
-        <GraphPanel value={graphValue} />
+        <GraphPanel value={graphValue} theme={theme} />
       </div>
     </main>
   );

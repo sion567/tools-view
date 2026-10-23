@@ -25,6 +25,7 @@ import {
   type GraphNode,
   type GraphNodeData,
 } from "../lib/graph";
+import type { Theme } from "../lib/theme";
 
 function KvNode({ data }: NodeProps<GraphNode>) {
   // 方向联动 handle：横向 = 左进右出，纵向 = 上进下出
@@ -55,7 +56,7 @@ function minimapColor(node: Node): string {
   return "#3ecf8e";
 }
 
-function GraphInner({ value }: { value: unknown }) {
+function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
   const [direction, setDirection] = useState<Direction>("vertical");
   const [downloading, setDownloading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -93,7 +94,8 @@ function GraphInner({ value }: { value: unknown }) {
     setDownloading(true);
     try {
       const options = {
-        backgroundColor: "#0d1117",
+        backgroundColor:
+          theme === "dark" ? "#0d1117" : "#fbfcfe",
         pixelRatio: 2,
         // 导出时排除 Controls / MiniMap 等浮动面板
         filter: (domNode: HTMLElement) =>
@@ -109,7 +111,7 @@ function GraphInner({ value }: { value: unknown }) {
     } finally {
       setDownloading(false);
     }
-  }, []);
+  }, [theme]);
 
   const hasGraph = nodes.length > 0;
 
@@ -164,16 +166,24 @@ function GraphInner({ value }: { value: unknown }) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
-            colorMode="dark"
+            colorMode={theme}
             fitView
             minZoom={0.05}
             proOptions={{ hideAttribution: true }}
             defaultEdgeOptions={{
               type: "smoothstep",
-              style: { stroke: "#41506b", strokeWidth: 1.5 },
+              style: {
+                stroke: theme === "dark" ? "#41506b" : "#a9b4c7",
+                strokeWidth: 1.5,
+              },
             }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#2a3348" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={18}
+              size={1}
+              color={theme === "dark" ? "#2a3348" : "#cbd3e1"}
+            />
             <Controls showInteractive={false} position="bottom-right" />
             <MiniMap pannable zoomable nodeColor={minimapColor} position="bottom-left" />
           </ReactFlow>
@@ -186,10 +196,10 @@ function GraphInner({ value }: { value: unknown }) {
   );
 }
 
-export default function GraphPanel({ value }: { value: unknown }) {
+export default function GraphPanel({ value, theme }: { value: unknown; theme: Theme }) {
   return (
     <ReactFlowProvider>
-      <GraphInner value={value} />
+      <GraphInner value={value} theme={theme} />
     </ReactFlowProvider>
   );
 }

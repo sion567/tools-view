@@ -6,7 +6,19 @@
     <title>Tools View · JSON/YAML/XML 可视化</title>
     <style>
       html, body { background: #0b0e14; }
+      :root[data-theme="light"], :root[data-theme="light"] body { background: #f4f6fa; }
     </style>
+    <script>
+      // 首屏前同步主题，避免闪白/闪黑
+      (function () {
+        var saved = null;
+        try { saved = localStorage.getItem("tools-view.theme"); } catch (e) {}
+        var theme = saved === "light" || saved === "dark"
+          ? saved
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

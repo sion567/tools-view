@@ -3,11 +3,12 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { indentWithTab } from "@codemirror/commands";
-import { oneDark } from "@codemirror/theme-one-dark";
 import { json } from "@codemirror/lang-json";
 import { yaml } from "@codemirror/lang-yaml";
 import { xml } from "@codemirror/lang-xml";
+import { editorTheme } from "../lib/editorTheme";
 import type { Format } from "../lib/types";
+import type { Theme } from "../lib/theme";
 
 function langExtension(format: Format | null) {
   if (format === "json") return json();
@@ -24,6 +25,8 @@ interface InputPanelProps {
   onFormatClick: () => void;
   onClear: () => void;
   onSample: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
 }
 
 export default function InputPanel({
@@ -34,33 +37,30 @@ export default function InputPanel({
   onFormatClick,
   onClear,
   onSample,
+  theme,
+  onToggleTheme,
 }: InputPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const langCompartmentRef = useRef(new Compartment());
+  const themeCompartmentRef = useRef(new Compartment());
   const lastInternalRef = useRef<string>(value);
   const onTextChangeRef = useRef(onTextChange);
   onTextChangeRef.current = onTextChange;
 
   useEffect(() => {
     const langCompartment = langCompartmentRef.current;
+    const themeCompartment = themeCompartmentRef.current;
     const view = new EditorView({
       state: EditorState.create({
         doc: value,
         extensions: [
           basicSetup,
-          oneDark,
+          themeCompartment.of(editorTheme(theme)),
           langCompartment.of(langExtension(format)),
           cmPlaceholder("粘贴 JSON / YAML / XML 文本，粘贴后自动识别…"),
           EditorView.lineWrapping,
           keymap.of([indentWithTab]),
-          EditorView.theme({
-            "&": { height: "100%", fontSize: "13px" },
-            ".cm-scroller": {
-              overflow: "auto",
-              fontFamily: "'Cascadia Mono', Consolas, monospace",
-            },
-          }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const text = update.state.doc.toString();
@@ -101,6 +101,15 @@ export default function InputPanel({
     });
   }, [format]);
 
+  // 切换明暗主题时重配编辑器配色
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: themeCompartmentRef.current.reconfigure(editorTheme(theme)),
+    });
+  }, [theme]);
+
   const badge = busy
     ? "识别中…"
     : format
@@ -127,6 +136,14 @@ export default function InputPanel({
           </button>
           <button className="btn" onClick={onClear}>
             清空
+          </button>
+          <button
+            className="btn icon"
+            onClick={onToggleTheme}
+            title={theme === "dark" ? "切换到明亮模式" : "切换到暗黑模式"}
+            aria-label={theme === "dark" ? "切换到明亮模式" : "切换到暗黑模式"}
+          >
+            {theme === "dark" ? "☀" : "☾"}
           </button>
         </div>
       </header>
