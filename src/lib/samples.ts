@@ -12,7 +12,7 @@ export const SAMPLES: Sample[] = [
   "features": ["auto-detect", "pretty-print", "graph-view"],
   "parsers": {
     "json": { "crate": "serde_json", "stable": true },
-    "yaml": { "crate": "serde_yaml", "stable": true },
+    "yaml": { "crate": "yaml_serde", "stable": true },
     "xml": { "crate": "quick-xml", "stable": true }
   },
   "authors": [
@@ -40,7 +40,7 @@ parsers:
     crate: serde_json
     speed: fast
   - name: yaml
-    crate: serde_yaml
+    crate: yaml_serde
     speed: fast
   - name: xml
     crate: quick-xml

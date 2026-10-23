@@ -10,17 +10,18 @@ Rust + Tauri 桌面工具：粘贴 JSON / YAML / XML，自动识别格式，左�
 - **图线区**：React Flow（@xyflow/react）+ elkjs 分层布局（`elk.algorithm: layered`）
   - 纵向（DOWN）/ 横向（RIGHT）切换，节点 handle 位置联动（上/下进出 ↔ 左/右进出）
   - 缩放、拖拽、小地图；节点按 object / array / scalar 着色
-  - 下载 PNG / SVG（html-to-image，导出时排除 Controls/MiniMap 面板）
+  - 下载 PNG / SVG：按图的真实坐标（zoom = 1）重新生成纯矢量 SVG，PNG 由其光栅化，因此放大不糊；
+    图宽超过单张画布上限（65535px）时自动分块导出多个 PNG
 
 ## 技术栈
 
 | 模块 | 实现 |
 |---|---|
-| 后端解析 | Rust：serde_json、serde_yaml、quick-xml |
+| 后端解析 | Rust：serde_json、yaml_serde、quick-xml |
 | 输入区 | CodeMirror 6 + 自动格式识别（350ms 防抖） |
 | 格式化区 | Rust pretty-print + 错误提示（行列定位） |
 | 图线区 | @xyflow/react + elkjs（layered / RIGHT·DOWN） |
-| 下载图片 | html-to-image（PNG / SVG） |
+| 下载图片 | 自绘 SVG（zoom = 1）→ PNG / SVG |
 | 打包 | Tauri v2 |
 
 ## 开发

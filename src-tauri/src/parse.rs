@@ -113,7 +113,7 @@ fn try_json(s: &str) -> Result<(String, Json), ParseError> {
 }
 
 fn try_yaml(s: &str) -> Result<(String, Json), ParseError> {
-    let yaml_value: serde_yaml::Value = serde_yaml::from_str(s).map_err(|e| {
+    let yaml_value: yaml_serde::Value = yaml_serde::from_str(s).map_err(|e| {
         let (line, column) = e
             .location()
             .map(|loc| (Some(loc.line() as u32), Some(loc.column() as u32)))
@@ -139,7 +139,7 @@ fn try_yaml(s: &str) -> Result<(String, Json), ParseError> {
         line: None,
         column: None,
     })?;
-    let pretty = serde_yaml::to_string(&yaml_value).map_err(|e| ParseError {
+    let pretty = yaml_serde::to_string(&yaml_value).map_err(|e| ParseError {
         message: format!("YAML 序列化失败：{e}"),
         line: None,
         column: None,

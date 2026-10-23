@@ -15,9 +15,7 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { toPng, toSvg } from "html-to-image";
-import "@xyflow/react/dist/style.css";
-import {
+import "@xyflow/react/dist/style.css";import {
   buildGraph,
   layoutGraph,
   MAX_NODES,
@@ -25,6 +23,14 @@ import {
   type GraphNode,
   type GraphNodeData,
 } from "../lib/graph";
+import {
+  buildGraphContent,
+  downloadBlob,
+  pickScale,
+  planBands,
+  rasterizeBand,
+  rasterizeSvg,
+} from "../lib/graphExport";
 import type { Theme } from "../lib/theme";
 
 function KvNode({ data }: NodeProps<GraphNode>) {
@@ -59,6 +65,7 @@ function minimapColor(node: Node): string {
 function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
   const [direction, setDirection] = useState<Direction>("vertical");
   const [downloading, setDownloading] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { fitView } = useReactFlow();
 
@@ -88,30 +95,50 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
     };
   }, [baseNodes, baseEdges, direction, fitView, setNodes, setEdges]);
 
-  const download = useCallback(async (fmt: "png" | "svg") => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    setDownloading(true);
-    try {
-      const options = {
-        backgroundColor:
-          theme === "dark" ? "#0d1117" : "#fbfcfe",
-        pixelRatio: 2,
-        // 导出时排除 Controls / MiniMap 等浮动面板
-        filter: (domNode: HTMLElement) =>
-          !(domNode.classList && domNode.classList.contains("react-flow__panel")),
-      };
-      const url = fmt === "png" ? await toPng(el, options) : await toSvg(el, options);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `graph-${Date.now()}.${fmt}`;
-      a.click();
-    } catch (err) {
-      console.error("导出图片失败", err);
-    } finally {
-      setDownloading(false);
-    }
-  }, [theme]);
+  const download = useCallback(
+    async (fmt: "png" | "svg") => {
+      if (nodes.length === 0) return;
+      setDownloading(true);
+      setExportNote(null);
+      try {
+        // 按图的真实坐标（zoom = 1）重新生成一份 SVG，
+        // 而不是截取当前视口——节点多时后者会把整张图压扁。
+        const { full, content, width, height } = buildGraphContent(nodes, edges);
+        const name = `graph-${Date.now()}`;
+
+        if (fmt === "svg") {
+          downloadBlob(
+            new Blob([full.svg], { type: "image/svg+xml;charset=utf-8" }),
+            `${name}.svg`,
+          );
+          return;
+        }
+
+        const bands = planBands(width, height);
+        if (bands.length === 1) {
+          const blob = await rasterizeSvg(full.svg, width, height);
+          downloadBlob(blob, `${name}.png`);
+          return;
+        }
+
+        // 图比一张画布还大：分块导出，每块都是原始分辨率
+        setExportNote(
+          `图宽 ${width}px，超出单张 PNG 上限，正在分 ${bands.length} 块导出。`,
+        );
+        const scale = pickScale(bands[0].width, bands[0].height);
+        for (let i = 0; i < bands.length; i++) {
+          const blob = await rasterizeBand(content, bands[i], scale);
+          downloadBlob(blob, `${name}-${i + 1}of${bands.length}.png`);
+        }
+      } catch (err) {
+        console.error("导出图片失败", err);
+        setExportNote("导出失败，请改用 SVG 试试。");
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [nodes, edges],
+  );
 
   const hasGraph = nodes.length > 0;
 
@@ -125,6 +152,7 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
           </span>
         )}
         {truncated && <span className="badge warn">已截断</span>}
+        {exportNote && <span className="badge warn">{exportNote}</span>}
         <div className="panel-actions">
           <div className="seg" role="group" aria-label="布局方向">
             <button
