@@ -7,13 +7,15 @@ export type GraphNodeData = {
   kind: "object" | "array" | "scalar";
   title: string;
   direction: Direction;
+  /** JSON path（$.a.b[0]），双击节点复制用 */
+  path: string;
 };
 
 export type GraphNode = Node<GraphNodeData, "kv">;
 
 export const NODE_WIDTH = 190;
 export const NODE_HEIGHT = 44;
-export const MAX_NODES = 1200;
+export const MAX_NODES = 3000;
 
 export interface GraphBuild {
   nodes: GraphNode[];
@@ -49,6 +51,10 @@ function summaryOf(
   return { label: `${name}: ${scalarText(v)}`, kind: "scalar", title };
 }
 
+function pathKeyPart(k: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(k) ? `.${k}` : `[${JSON.stringify(k)}]`;
+}
+
 /// 把归一化后的 JSON 值构建为 React Flow 的节点树 + 父子边
 export function buildGraph(value: unknown): GraphBuild {
   const nodes: GraphNode[] = [];
@@ -56,7 +62,7 @@ export function buildGraph(value: unknown): GraphBuild {
   let truncated = false;
   let total = 0;
 
-  const walk = (v: unknown, key: string, parentId: string | null) => {
+  const walk = (v: unknown, key: string, parentId: string | null, path: string) => {
     total += 1;
     if (nodes.length >= MAX_NODES) {
       truncated = true;
@@ -67,7 +73,7 @@ export function buildGraph(value: unknown): GraphBuild {
     nodes.push({
       id,
       type: "kv",
-      data: { label, kind, title, direction: "vertical" },
+      data: { label, kind, title, direction: "vertical", path },
       position: { x: 0, y: 0 },
     });
     if (parentId !== null) {
@@ -76,16 +82,16 @@ export function buildGraph(value: unknown): GraphBuild {
 
     if (v !== null && typeof v === "object") {
       if (Array.isArray(v)) {
-        v.forEach((item, i) => walk(item, `[${i}]`, id));
+        v.forEach((item, i) => walk(item, `[${i}]`, id, `${path}[${i}]`));
       } else {
         for (const [k, item] of Object.entries(v as Record<string, unknown>)) {
-          walk(item, k, id);
+          walk(item, k, id, path + pathKeyPart(k));
         }
       }
     }
   };
 
-  walk(value, "", null);
+  walk(value, "", null, "$");
   return { nodes, edges, truncated, total };
 }
 

@@ -109,7 +109,7 @@ function handlesOf(node: GraphNode): { source: HandlePoint; target: HandlePoint 
   };
 }
 
-export function graphBounds(nodes: GraphNode[]): {
+function graphBounds(nodes: GraphNode[]): {
   x: number;
   y: number;
   width: number;
@@ -132,10 +132,6 @@ export function graphBounds(nodes: GraphNode[]): {
     width: maxX - minX + PADDING * 2,
     height: maxY - minY + PADDING * 2,
   };
-}
-
-export function buildGraphSvg(nodes: GraphNode[], edges: Edge[]): GraphSvg {
-  return buildGraphContent(nodes, edges).full;
 }
 
 /** 图的内容 + 尺寸；full 是整图 SVG，bands 用于分块光栅化 */
@@ -275,18 +271,13 @@ export function pickScale(width: number, height: number): number {
   return Math.max(0.25, Math.min(MAX_SCALE, byDim, byPixels));
 }
 
-/** 图宽高是否超出单张 canvas 能承载的范围 */
-export function exceedsCanvas(width: number, height: number): boolean {
-  return width > CANVAS_MAX_DIM || height > CANVAS_MAX_DIM;
-}
-
-/** 把 SVG 光栅化成 PNG Blob */
-export async function rasterizeSvg(
+/** 把 SVG 光栅化成 PNG Blob（整图或分块共用：svg 自带正确的 width/height/viewBox） */
+export async function rasterize(
   svg: string,
   width: number,
   height: number,
+  scale: number,
 ): Promise<Blob> {
-  const scale = pickScale(width, height);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
@@ -314,40 +305,12 @@ export async function rasterizeSvg(
   }
 }
 
-/** 把图的某一条竖带光栅化成 PNG（用 viewBox 平移截取） */
-export async function rasterizeBand(
-  content: string,
-  band: Band,
-  scale: number,
-): Promise<Blob> {
-  const svg =
+/** 用图的内部 markup 按 band 的 viewBox 拼出分块 SVG */
+export function bandSvg(content: string, band: Band): string {
+  return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${band.width}" height="${band.height}" ` +
-    `viewBox="${band.x} ${band.y} ${band.width} ${band.height}">${content}</svg>`;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(band.width * scale));
-  canvas.height = Math.max(1, Math.round(band.height * scale));
-
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  try {
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("SVG 光栅化失败"));
-      img.src = url;
-    });
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("无法创建 canvas 上下文");
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => {
-        if (b) resolve(b);
-        else reject(new Error("PNG 编码失败"));
-      }, "image/png");
-    });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+    `viewBox="${band.x} ${band.y} ${band.width} ${band.height}">${content}</svg>`
+  );
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

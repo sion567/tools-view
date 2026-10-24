@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "默认窗口能力",
+  "description": "默认窗口能力：核心 API + 保存/打开对话框",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:allow-save", "dialog:allow-open"]
 }

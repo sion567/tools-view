@@ -8,7 +8,7 @@
  *   块延伸到下一条缩进不大于它的非空行为止
  */
 
-export type FoldFormat = "json" | "yaml" | "xml";
+export type FoldFormat = "json" | "yaml" | "xml" | "toml";
 
 export interface FoldNode {
   /** 起始行（0 基） */
@@ -22,7 +22,9 @@ export interface FoldNode {
 
 export function buildFoldTree(pretty: string, format: FoldFormat): FoldNode[] {
   const lines = pretty.split("\n");
-  return format === "yaml" ? buildYamlTree(lines) : buildBracketTree(lines, format);
+  if (format === "yaml") return buildYamlTree(lines);
+  if (format === "toml") return buildTomlTree(lines);
+  return buildBracketTree(lines, format);
 }
 
 /** 括号 / 标签配对式（JSON、XML） */
@@ -77,8 +79,7 @@ function buildBracketTree(lines: string[], format: FoldFormat): FoldNode[] {
 }
 
 /** 缩进块式（YAML） */
-function buildYamlTree(lines: string[]): FoldNode[] {
-  const indentOf = lines.map((l) => (l.trim() === "" ? -1 : l.length - l.trimStart().length));
+function buildYamlTree(lines: string[]): FoldNode[] {  const indentOf = lines.map((l) => (l.trim() === "" ? -1 : l.length - l.trimStart().length));
 
   // 可折叠行：下一条非空行缩进更深
   const foldable: FoldNode[] = [];
@@ -102,6 +103,36 @@ function buildYamlTree(lines: string[]): FoldNode[] {
     else roots.push(node);
     stack.push(node);
   }
+  return roots;
+}
+
+/** 表格头式（TOML）：[table] / [[array]] 头部行可折叠，块到下一个同级或更浅的表头 */
+function buildTomlTree(lines: string[]): FoldNode[] {
+  const HEADER_RE = /^\s*\[+.*\]+\s*$/;
+  const isHeader = (l: string) => HEADER_RE.test(l);
+  const depthOf = (l: string) => {
+    const m = l.trim().match(/^\[+(.*?)\]+$/);
+    return m ? (m[1].match(/\./g)?.length ?? 0) : -1;
+  };
+
+  const roots: FoldNode[] = [];
+  const stack: FoldNode[] = [];
+  const closeTop = (end: number) => {
+    const n = stack.pop();
+    if (n) n.end = end;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    if (!isHeader(lines[i])) continue;
+    const d = depthOf(lines[i]);
+    while (stack.length > 0 && depthOf(lines[stack[stack.length - 1].line]) >= d) {
+      closeTop(i - 1);
+    }
+    const node: FoldNode = { line: i, end: i, hasCloser: false, children: [] };
+    if (stack.length > 0) stack[stack.length - 1].children.push(node);
+    else roots.push(node);
+    stack.push(node);
+  }
+  while (stack.length > 0) closeTop(lines.length - 1);
   return roots;
 }
 
