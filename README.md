@@ -5,8 +5,9 @@ Rust + Tauri 桌面工具：粘贴 JSON / YAML / XML，自动识别格式，左�
 ## 功能
 
 - **自动识别格式**：粘贴/输入停顿后自动检测（JSON → YAML/XML），无需手动选类型；也可点「格式化」手动触发
+- **布局**：T 字形三栏。输入区与下方双栏之间的分割条可拖拽调整高度（记忆）；格式化区 / 图线区各自可「全屏」或「并排」（记忆）
 - **输入区**（CodeMirror 6，语法高亮跟随识别结果）：格式化 / 清空 / 示例
-- **格式化区**：Rust 侧 pretty-print（JSON 缩进输出 / YAML / 缩进 XML），解析失败显示错误信息 + 行列号
+- **格式化区**：Rust 侧 pretty-print（JSON 缩进输出 / YAML / 缩进 XML），解析失败显示错误信息 + 行列号；行号显示、按块折叠/展开（JSON 括号 / YAML 缩进块 / XML 标签）、全部折叠/展开、复制；超 3000 行自动停用折叠（防大文档卡顿）
 - **图线区**：React Flow（@xyflow/react）+ 自研 Reingold–Tilford 树布局（带轮廓合并）
   - 纵向（DOWN）/ 横向（RIGHT）切换，节点 handle 位置联动（上/下进出 ↔ 左/右进出）
   - 缩放、拖拽、小地图；节点按 object / array / scalar 着色
@@ -19,7 +20,7 @@ Rust + Tauri 桌面工具：粘贴 JSON / YAML / XML，自动识别格式，左�
 |---|---|
 | 后端解析 | Rust：serde_json、yaml_serde、quick-xml |
 | 输入区 | CodeMirror 6 + 自动格式识别（350ms 防抖） |
-| 格式化区 | Rust pretty-print + 错误提示（行列定位） |
+| 格式化区 | Rust pretty-print + 行号 / 块折叠（lib/fold.ts）+ 错误提示（行列定位） |
 | 图线区 | @xyflow/react + 自研树布局（Reingold–Tilford / RIGHT·DOWN） |
 | 下载图片 | 自绘 SVG（zoom = 1）→ PNG / SVG |
 | 打包 | Tauri v2 |

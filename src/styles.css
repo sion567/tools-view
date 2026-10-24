@@ -68,13 +68,45 @@ body {
   overflow: hidden;
 }
 
-/* 布局：上=输入区(28%)，下=格式化区(34%) + 图线区(66%) */
+/* 布局：T 字形。行高由 App 内联控制（输入区高度可拖拽），上=输入区，下=格式化区 + 图线区 */
 .app {
   height: 100vh;
   display: grid;
-  grid-template-rows: minmax(200px, 28%) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-rows: minmax(200px, 28%) 8px minmax(0, 1fr);
+  gap: 3px;
   padding: 10px;
+}
+
+/* 输入区 / 下方双栏之间的拖拽条 */
+.row-divider {
+  cursor: row-resize;
+  touch-action: none;
+  position: relative;
+}
+
+.row-divider::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.row-divider:hover::after,
+.row-divider:active::after {
+  background: var(--accent);
+}
+
+/* 拖拽期间全局行光标并禁用选中文本 */
+body.dragging-input,
+body.dragging-input * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 .app-bottom {
@@ -82,6 +114,15 @@ body {
   grid-template-columns: minmax(300px, 34%) minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
+}
+
+/* 仅显示单个面板（全屏模式） */
+.app-bottom.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panel-hidden {
+  display: none !important;
 }
 
 .panel {
@@ -236,7 +277,7 @@ body {
   outline: none;
 }
 
-/* 格式化区 */
+/* 格式化区：纯文本回落（超大文档停用折叠时使用） */
 .pretty {
   margin: 0;
   height: 100%;
@@ -247,6 +288,70 @@ body {
   line-height: 1.6;
   white-space: pre;
   color: var(--code-text);
+}
+
+/* 格式化区：带行号与折叠的行视图 */
+.pretty-lines {
+  height: 100%;
+  overflow: auto;
+  padding: 8px 0 12px 0;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.pl-row {
+  display: flex;
+  align-items: flex-start;
+  white-space: pre;
+  min-width: max-content;
+  padding-right: 14px;
+}
+
+.pl-row:hover {
+  background: var(--panel-2);
+}
+
+.pl-gutter {
+  flex: none;
+  width: var(--gutter-w, 4ch);
+  text-align: right;
+  padding: 0 10px 0 14px;
+  color: var(--text-dim);
+  opacity: 0.6;
+  user-select: none;
+}
+
+.pl-toggle,
+.pl-toggle-sp {
+  flex: none;
+  width: 18px;
+  text-align: center;
+}
+
+.pl-toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 10px;
+  line-height: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.pl-toggle:hover {
+  color: var(--accent);
+}
+
+.pl-code {
+  color: var(--code-text);
+}
+
+.pl-summary {
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 .placeholder {

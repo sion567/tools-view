@@ -55,6 +55,8 @@ function KvNode({ data }: NodeProps<GraphNode>) {
 
 const nodeTypes = { kv: KvNode };
 
+const EMPTY_BUILD = { nodes: [], edges: [], truncated: false, total: 0 };
+
 function minimapColor(node: Node): string {
   const kind = (node.data as GraphNodeData).kind;
   if (kind === "object") return "#4f8cff";
@@ -62,15 +64,28 @@ function minimapColor(node: Node): string {
   return "#3ecf8e";
 }
 
-function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
+function GraphInner({
+  value,
+  theme,
+  hidden,
+  fullscreen,
+  onToggleFullscreen,
+}: {
+  value: unknown;
+  theme: Theme;
+  hidden?: boolean;
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+}) {
   const [direction, setDirection] = useState<Direction>("vertical");
   const [downloading, setDownloading] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { fitView } = useReactFlow();
 
+  // value 为 null/undefined（尚未解析）时不建图，保持空态提示
   const { nodes: baseNodes, edges: baseEdges, truncated, total } = useMemo(
-    () => buildGraph(value),
+    () => (value == null ? EMPTY_BUILD : buildGraph(value)),
     [value],
   );
 
@@ -134,7 +149,7 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
   const hasGraph = nodes.length > 0;
 
   return (
-    <section className="panel graph-panel">
+    <section className={`panel graph-panel${hidden ? " panel-hidden" : ""}`}>
       <header className="panel-header">
         <span className="panel-title">图线区</span>
         {hasGraph && (
@@ -174,6 +189,13 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
             onClick={() => download("svg")}
           >
             下载 SVG
+          </button>
+          <button
+            className="btn"
+            onClick={onToggleFullscreen}
+            title={fullscreen ? "恢复并排显示" : "全屏显示此面板"}
+          >
+            {fullscreen ? "并排" : "全屏"}
           </button>
         </div>
       </header>
@@ -215,10 +237,28 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
   );
 }
 
-export default function GraphPanel({ value, theme }: { value: unknown; theme: Theme }) {
+export default function GraphPanel({
+  value,
+  theme,
+  hidden,
+  fullscreen,
+  onToggleFullscreen,
+}: {
+  value: unknown;
+  theme: Theme;
+  hidden?: boolean;
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+}) {
   return (
     <ReactFlowProvider>
-      <GraphInner value={value} theme={theme} />
+      <GraphInner
+        value={value}
+        theme={theme}
+        hidden={hidden}
+        fullscreen={fullscreen}
+        onToggleFullscreen={onToggleFullscreen}
+      />
     </ReactFlowProvider>
   );
 }

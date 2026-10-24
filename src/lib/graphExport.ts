@@ -15,8 +15,6 @@ import { NODE_HEIGHT, NODE_WIDTH, type GraphNode } from "./graph";
  * 因此放大到任意倍数都清晰，SVG 也是真正的矢量。
  */
 
-const HANDLE_SIZE = 7; // 与 .kv-handle 的 CSS 尺寸一致
-const HALF_HANDLE = HANDLE_SIZE / 2;
 const PADDING = 24; // 图外围留白
 const TEXT_PADDING = 12;
 const FONT_FAMILY = "'Cascadia Mono', Consolas, monospace";
@@ -77,20 +75,21 @@ interface HandlePoint {
 }
 
 /**
- * 边的端点取自 handle 的外沿（React Flow 对 Bottom 取底边、Top 取顶边），
- * 这里的数值与屏幕上的渲染一致（已用脚本比对过 path d）。
+ * 边的端点直接落在节点边框上。
+ * 屏幕上 React Flow 的边停在 handle 外沿（边框外约 3.5px），空隙被 handle
+ * 圆点盖住；导出不画 handle 圆点，端点若不贴到边框，每条边两头都会露出空隙。
  */
 function handlesOf(node: GraphNode): { source: HandlePoint; target: HandlePoint } {
   const { x, y } = node.position;
   if (node.data.direction === "horizontal") {
     return {
       source: {
-        x: x + NODE_WIDTH + HALF_HANDLE,
+        x: x + NODE_WIDTH,
         y: y + NODE_HEIGHT / 2,
         position: Position.Right,
       },
       target: {
-        x: x - HALF_HANDLE,
+        x,
         y: y + NODE_HEIGHT / 2,
         position: Position.Left,
       },
@@ -99,12 +98,12 @@ function handlesOf(node: GraphNode): { source: HandlePoint; target: HandlePoint 
   return {
     source: {
       x: x + NODE_WIDTH / 2,
-      y: y + NODE_HEIGHT + HALF_HANDLE,
+      y: y + NODE_HEIGHT,
       position: Position.Bottom,
     },
     target: {
       x: x + NODE_WIDTH / 2,
-      y: y - HALF_HANDLE,
+      y,
       position: Position.Top,
     },
   };
