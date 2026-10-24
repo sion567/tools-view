@@ -77,22 +77,13 @@ function GraphInner({ value, theme }: { value: unknown; theme: Theme }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  // 数据或方向变化时重新用 elkjs 计算布局
+  // 数据或方向变化时重新计算树布局（自研 Reingold–Tilford，同步毫秒级）
   useEffect(() => {
-    let cancelled = false;
-    layoutGraph(baseNodes, baseEdges, direction)
-      .then((laidNodes) => {
-        if (cancelled) return;
-        setNodes(laidNodes);
-        setEdges(baseEdges);
-        requestAnimationFrame(() => {
-          fitView({ padding: 0.12, maxZoom: 1.2, duration: 200 });
-        });
-      })
-      .catch((err) => console.error("elk 布局失败", err));
-    return () => {
-      cancelled = true;
-    };
+    setNodes(layoutGraph(baseNodes, baseEdges, direction));
+    setEdges(baseEdges);
+    requestAnimationFrame(() => {
+      fitView({ padding: 0.12, maxZoom: 1.2, duration: 200 });
+    });
   }, [baseNodes, baseEdges, direction, fitView, setNodes, setEdges]);
 
   const download = useCallback(

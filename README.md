@@ -7,7 +7,7 @@ Rust + Tauri 桌面工具：粘贴 JSON / YAML / XML，自动识别格式，左�
 - **自动识别格式**：粘贴/输入停顿后自动检测（JSON → YAML/XML），无需手动选类型；也可点「格式化」手动触发
 - **输入区**（CodeMirror 6，语法高亮跟随识别结果）：格式化 / 清空 / 示例
 - **格式化区**：Rust 侧 pretty-print（JSON 缩进输出 / YAML / 缩进 XML），解析失败显示错误信息 + 行列号
-- **图线区**：React Flow（@xyflow/react）+ elkjs 分层布局（`elk.algorithm: layered`）
+- **图线区**：React Flow（@xyflow/react）+ 自研 Reingold–Tilford 树布局（带轮廓合并）
   - 纵向（DOWN）/ 横向（RIGHT）切换，节点 handle 位置联动（上/下进出 ↔ 左/右进出）
   - 缩放、拖拽、小地图；节点按 object / array / scalar 着色
   - 下载 PNG / SVG：按图的真实坐标（zoom = 1）重新生成纯矢量 SVG，PNG 由其光栅化，因此放大不糊；
@@ -20,7 +20,7 @@ Rust + Tauri 桌面工具：粘贴 JSON / YAML / XML，自动识别格式，左�
 | 后端解析 | Rust：serde_json、yaml_serde、quick-xml |
 | 输入区 | CodeMirror 6 + 自动格式识别（350ms 防抖） |
 | 格式化区 | Rust pretty-print + 错误提示（行列定位） |
-| 图线区 | @xyflow/react + elkjs（layered / RIGHT·DOWN） |
+| 图线区 | @xyflow/react + 自研树布局（Reingold–Tilford / RIGHT·DOWN） |
 | 下载图片 | 自绘 SVG（zoom = 1）→ PNG / SVG |
 | 打包 | Tauri v2 |
 
@@ -44,7 +44,7 @@ npm run tauri build
 ```
 src/                  前端（React + TS）
   components/         InputPanel / FormatPanel / GraphPanel
-  lib/graph.ts        JSON 值 → React Flow 节点树 + elkjs 布局
+  lib/graph.ts        JSON 值 → React Flow 节点树 + 树布局（Reingold–Tilford）
   lib/parse.ts        invoke 封装
 src-tauri/
   src/parse.rs        格式识别 + 解析 + 归一化 JSON + pretty-print

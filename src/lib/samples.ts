@@ -51,7 +51,7 @@ ui:
     - monaco
   graph:
     library: react-flow
-    layout: elkjs
+    layout: tidy-tree
     direction: DOWN
 features:
   enabled: true
