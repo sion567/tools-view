@@ -30,11 +30,15 @@ export function usePersistentState<T>(
 ) {
   const [value, setValue] = useState<T>(() => readPersisted(key, fallback, parse));
   useEffect(() => {
-    try {
-      localStorage.setItem(key, serialize(value));
-    } catch {
-      // 忽略写入失败
-    }
+    // 拖拽分割条会以指针频率连发更新，防抖落盘避免高频同步写 localStorage
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(key, serialize(value));
+      } catch {
+        // 忽略写入失败
+      }
+    }, 300);
+    return () => window.clearTimeout(t);
   }, [key, value, serialize]);
   return [value, setValue] as const;
 }

@@ -1,16 +1,17 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
+  lazy,
+  Suspense,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import InputPanel from "./components/InputPanel";
 import FormatPanel from "./components/FormatPanel";
-import GraphPanel from "./components/GraphPanel";
 import HelpModal from "./components/HelpModal";
-import { buildLinkage } from "./lib/linkage";
+import { IconButton, IconMaximize } from "./components/icons";
+import { buildLinkage, type Linkage } from "./lib/linkage";
 import { parseText, readTextFile } from "./lib/parse";
 import { SAMPLES } from "./lib/samples";
 import { useTheme } from "./lib/theme";
@@ -36,6 +37,38 @@ const clampFmt = (w: number, innerW: number) =>
 
 const parseView = parseEnum(["split", "format", "graph"] as const);
 
+// 图库 chunk 较大（约占首屏 JS 四分之一）：拆成懒加载，首份数据到达前不加载
+const GraphPanel = lazy(() => import("./components/GraphPanel"));
+
+/** 防抖值：搜索词传给全量扫描的消费者（行匹配 / 节点匹配），避免每键全量扫描 */
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [deferred, setDeferred] = useState(value);
+  useEffect(() => {
+    const t = window.setTimeout(() => setDeferred(value), delay);
+    return () => window.clearTimeout(t);
+  }, [value, delay]);
+  return deferred;
+}
+
+/** 图线区占位：面板骨架与全屏入口保留，图库 chunk 未加载时不渲染 React Flow */
+function GraphPlaceholder({ hidden, onOpen }: { hidden: boolean; onOpen: () => void }) {
+  return (
+    <section className={`panel graph-panel${hidden ? " panel-hidden" : ""}`}>
+      <header className="panel-header">
+        <span className="panel-title">图线区</span>
+        <div className="panel-actions">
+          <IconButton icon={<IconMaximize />} label="全屏显示此面板（Ctrl+3）" onClick={onOpen} />
+        </div>
+      </header>
+      <div className="panel-body">
+        <div className="flow-wrap">
+          <div className="flow-empty">在上方粘贴 JSON / YAML / XML / TOML，或直接拖入文件</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const [text, setText] = useState("");
@@ -43,6 +76,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [target, setTarget] = useState<FormatTarget>("auto");
   const [query, setQuery] = useState("");
+  // 全量扫描类消费者（格式化区行匹配 / 图节点匹配）用防抖值；
+  // 搜索框本身与可见行高亮仍用即时 query
+  const searchQuery = useDebouncedValue(query, 200);
   /** 格式化区定位请求（图线区节点点击） */
   const [locate, setLocate] = useState<{ line: number; ts: number } | null>(null);
   /** 输入区定位请求（点击错误位置） */
@@ -50,7 +86,7 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
   const seqRef = useRef(0);
-  const lastKeyRef = useRef<string | null>(null);
+  const lastKeyRef = useRef<{ ok: boolean; text: string } | null>(null);
   const sampleIndexRef = useRef(0);
   const prevTargetRef = useRef<FormatTarget>("auto");
 
@@ -85,9 +121,13 @@ export default function App() {
       const result = await parseText(raw, target);
       if (seq !== seqRef.current) return; // 丢弃过期结果
       // 结果（含错误）与上次一致时跳过，避免无谓的重建图/重渲染，
-      // 同时保住格式化区的折叠状态
-      const key = result.ok ? `ok:${result.pretty}` : `err:${result.error?.message}`;
-      if (key === lastKeyRef.current) {
+      // 同时保住格式化区的折叠状态。直接持有 pretty/message 的引用比较，
+      // 不再拼接出与输出等大的 key 字符串
+      const key = result.ok
+        ? { ok: true, text: result.pretty ?? "" }
+        : { ok: false, text: result.error?.message ?? "" };
+      const last = lastKeyRef.current;
+      if (last !== null && last.ok === key.ok && last.text === key.text) {
         setBusy(false);
         return;
       }
@@ -123,6 +163,16 @@ export default function App() {
     sampleIndexRef.current += 1;
     setText(sample.content);
   }, []);
+
+  // 全屏切换回调保持稳定引用，配合 GraphPanel 的 memo 跳过无关重渲染
+  const toggleFormatFullscreen = useCallback(
+    () => setBottomView((v) => (v === "format" ? "split" : "format")),
+    [setBottomView],
+  );
+  const toggleGraphFullscreen = useCallback(
+    () => setBottomView((v) => (v === "graph" ? "split" : "graph")),
+    [setBottomView],
+  );
 
   // ---- 键盘快捷键：Ctrl+Enter 格式化 / Ctrl+L 清空 / Ctrl+1/2/3 面板布局 ----
   const handleFormatClickRef = useRef(handleFormatClick);
@@ -247,21 +297,26 @@ export default function App() {
   // ---- 图节点 ↔ 格式化区行联动（仅 JSON 输出可精确定位） ----
   const outFormat =
     shownResponse?.ok ? (target === "auto" ? shownResponse.format : target) : null;
-  const linkage = useMemo(
-    () =>
-      shownResponse?.ok && outFormat === "json" && shownResponse.pretty
-        ? buildLinkage(shownResponse.value, shownResponse.pretty)
-        : null,
-    [shownResponse, outFormat],
-  );
+  // 联动只在点击图节点定位时用到：惰性构建并按 response 引用缓存，
+  // 避免每次解析成功都全量扫一遍 pretty 输出
+  const linkageRef = useRef<{ response: ParseResponse; linkage: Linkage } | null>(null);
+  const getLinkage = useCallback((): Linkage | null => {
+    const resp = shownResponse;
+    if (!resp?.ok || outFormat !== "json" || !resp.pretty) return null;
+    const cached = linkageRef.current;
+    if (cached && cached.response === resp) return cached.linkage;
+    const linkage = buildLinkage(resp.value, resp.pretty);
+    linkageRef.current = { response: resp, linkage };
+    return linkage;
+  }, [shownResponse, outFormat]);
 
   const handleLocateNode = useCallback(
     (nodeId: string) => {
       const idx = Number(nodeId.slice(1));
-      const line = linkage?.lines?.[idx];
+      const line = getLinkage()?.lines?.[idx];
       if (line != null) setLocate({ line, ts: Date.now() });
     },
-    [linkage],
+    [getLinkage],
   );
 
   const handleLocateEditor = useCallback((line: number) => {
@@ -273,6 +328,8 @@ export default function App() {
     Math.max(window.innerHeight - MIN_BOTTOM, MIN_INPUT),
   );
   const effectiveFmtWidth = clampFmt(fmtWidth, window.innerWidth);
+  // 图线区懒加载：首份数据或主动进入图线视图时才挂载（chunk 按需加载）
+  const mountGraph = graphValue != null || bottomView === "graph";
 
   return (
     <main
@@ -315,14 +372,13 @@ export default function App() {
           target={target}
           onTargetChange={setTarget}
           query={query}
+          searchQuery={searchQuery}
           onQueryChange={setQuery}
           locate={locate}
           onLocateEditor={handleLocateEditor}
           hidden={bottomView === "graph"}
           fullscreen={bottomView === "format"}
-          onToggleFullscreen={() =>
-            setBottomView((v) => (v === "format" ? "split" : "format"))
-          }
+          onToggleFullscreen={toggleFormatFullscreen}
         />
         <div
           className={`col-divider${bottomView === "split" ? "" : " panel-hidden"}`}
@@ -332,17 +388,32 @@ export default function App() {
           title="拖拽调整双栏宽度"
           onPointerDown={onColDividerDown}
         />
-        <GraphPanel
-          value={graphValue}
-          theme={theme}
-          query={query}
-          onLocateNode={handleLocateNode}
-          hidden={bottomView === "format"}
-          fullscreen={bottomView === "graph"}
-          onToggleFullscreen={() =>
-            setBottomView((v) => (v === "graph" ? "split" : "graph"))
-          }
-        />
+        {mountGraph ? (
+          <Suspense
+            fallback={
+              <section className="panel graph-panel">
+                <div className="panel-body">
+                  <div className="placeholder">图线区加载中…</div>
+                </div>
+              </section>
+            }
+          >
+            <GraphPanel
+              value={graphValue}
+              theme={theme}
+              query={searchQuery}
+              onLocateNode={handleLocateNode}
+              hidden={bottomView === "format"}
+              fullscreen={bottomView === "graph"}
+              onToggleFullscreen={toggleGraphFullscreen}
+            />
+          </Suspense>
+        ) : (
+          <GraphPlaceholder
+            hidden={bottomView === "format"}
+            onOpen={() => setBottomView("graph")}
+          />
+        )}
       </div>
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </main>

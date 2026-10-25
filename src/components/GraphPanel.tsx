@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -23,14 +23,6 @@ import "@xyflow/react/dist/style.css";import {
   type GraphNode,
   type GraphNodeData,
 } from "../lib/graph";
-import {
-  bandSvg,
-  buildGraphContent,
-  downloadBlob,
-  pickScale,
-  planBands,
-  rasterize,
-} from "../lib/graphExport";
 import {
   IconColumns,
   IconMaximize,
@@ -156,6 +148,9 @@ function GraphInner({
       try {
         // 按图的真实坐标（zoom = 1）重新生成一份 SVG，
         // 而不是截取当前视口——节点多时后者会把整张图压扁。
+        // 导出逻辑只有下载时用到，动态加载以减小首屏代码
+        const { bandSvg, buildGraphContent, downloadBlob, pickScale, planBands, rasterize } =
+          await import("../lib/graphExport");
         const { full, content, width, height } = buildGraphContent(nodes, edges);
         const name = `graph-${Date.now()}`;
 
@@ -295,7 +290,7 @@ function GraphInner({
 
 const EMPTY_BUILD = { nodes: [], edges: [] as Edge[], truncated: false, total: 0 };
 
-export default function GraphPanel({
+export default memo(function GraphPanel({
   value,
   theme,
   query,
@@ -325,4 +320,4 @@ export default function GraphPanel({
       />
     </ReactFlowProvider>
   );
-}
+});

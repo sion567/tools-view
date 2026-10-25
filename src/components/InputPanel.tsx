@@ -146,8 +146,10 @@ export default function InputPanel({
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
+    // 内部输入回流：先短路再比较，避免每次按键都把整个文档 toString
+    if (value === lastInternalRef.current) return;
     const current = view.state.doc.toString();
-    if (value !== current && value !== lastInternalRef.current) {
+    if (value !== current) {
       view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
     }
     lastInternalRef.current = value;

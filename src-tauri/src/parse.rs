@@ -109,6 +109,7 @@ fn detect(trimmed: &str) -> Result<Detected, ParseError> {
     };
 
     let mut first_err: Option<ParseError> = None;
+    let mut toml_err: Option<ParseError> = None;
     for kind in order {
         let result = match kind {
             "xml" => try_xml(trimmed),
@@ -117,7 +118,13 @@ fn detect(trimmed: &str) -> Result<Detected, ParseError> {
         };
         match result {
             Ok(v) => return Ok((kind, v)),
-            Err(e) => first_err.get_or_insert(e),
+            Err(e) => {
+                // 留存 TOML 错误供末尾回退报告复用，避免把整个输入再解析一遍
+                if kind == "toml" {
+                    toml_err = Some(e.clone());
+                }
+                first_err.get_or_insert(e);
+            }
         };
     }
 
@@ -131,11 +138,13 @@ fn detect(trimmed: &str) -> Result<Detected, ParseError> {
         // 只有"纯文本标量"这种未识别才回退到 TOML 错误
         match first_err {
             Some(e) if !e.message.contains("纯文本标量") => e,
-            _ => {
-                let mut toml_err = try_toml(trimmed).unwrap_err();
-                toml_err.message = format!("YAML/TOML 均解析失败，最近错误：{}", toml_err.message);
-                toml_err
-            }
+            _ => match toml_err {
+                Some(mut e) => {
+                    e.message = format!("YAML/TOML 均解析失败，最近错误：{}", e.message);
+                    e
+                }
+                None => first_err.unwrap_or(json_err),
+            },
         }
     })
 }

@@ -40,6 +40,8 @@ interface FormatPanelProps {
   target: FormatTarget;
   onTargetChange: (t: FormatTarget) => void;
   query: string;
+  /** 防抖后的搜索词：全量行匹配用；query 即时值用于输入框与可见行高亮 */
+  searchQuery: string;
   onQueryChange: (q: string) => void;
   /** 图线区节点点击请求定位：行号（0 基）+ 时间戳 */
   locate: { line: number; ts: number } | null;
@@ -96,6 +98,7 @@ export default function FormatPanel({
   target,
   onTargetChange,
   query,
+  searchQuery,
   onQueryChange,
   locate,
   onLocateEditor,
@@ -117,8 +120,11 @@ export default function FormatPanel({
   const format = response?.ok ? response.format : null;
   const outFormat: Format | null = target === "auto" ? format : target;
   const q = query.trim().toLowerCase();
+  const sq = searchQuery.trim().toLowerCase();
 
   const lines = useMemo(() => (pretty ? pretty.split("\n") : []), [pretty]);
+  // 行的小写形式随内容一次性算好：搜索每个按键只做 indexOf，不再为每行新建字符串
+  const lowerLines = useMemo(() => lines.map((l) => l.toLowerCase()), [lines]);
   const folds = useMemo(
     () => (pretty && outFormat ? buildFoldTree(pretty, outFormat) : []),
     [pretty, outFormat],
@@ -126,15 +132,15 @@ export default function FormatPanel({
   const foldCount = useMemo(() => countFolds(folds), [folds]);
   const interactive = lines.length > 0 && lines.length <= FOLD_MAX_LINES;
 
-  // 浏览器式搜索：全文里所有命中行（不改变展示内容）
+  // 浏览器式搜索：全文里所有命中行（不改变展示内容）；由防抖后的 sq 驱动
   const matches = useMemo(() => {
-    if (!q) return [] as number[];
+    if (!sq) return [] as number[];
     const out: number[] = [];
-    lines.forEach((text, i) => {
-      if (text.toLowerCase().includes(q)) out.push(i);
-    });
+    for (let i = 0; i < lowerLines.length; i++) {
+      if (lowerLines[i].includes(sq)) out.push(i);
+    }
     return out;
-  }, [lines, q]);
+  }, [lowerLines, sq]);
   const currentIdx = matches.length === 0 ? -1 : Math.min(Math.max(currentMatch, 0), matches.length - 1);
   const currentLine = currentIdx >= 0 ? matches[currentIdx] : -1;
 
@@ -145,17 +151,28 @@ export default function FormatPanel({
     setCurrentMatch(0);
   }, [pretty]);
 
-  // 虚拟滚动：监听滚动与容器尺寸
+  // 虚拟滚动：监听滚动与容器尺寸（滚动经 rAF 节流，每帧至多重算一次窗口）
+  const scrollRafRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const onScroll = () => setScrollTop(el.scrollTop);
+    const onScroll = () => {
+      if (scrollRafRef.current !== undefined) return;
+      scrollRafRef.current = window.requestAnimationFrame(() => {
+        scrollRafRef.current = undefined;
+        setScrollTop(el.scrollTop);
+      });
+    };
     el.addEventListener("scroll", onScroll, { passive: true });
     const ro = new ResizeObserver(() => setViewportH(el.clientHeight));
     ro.observe(el);
     setViewportH(el.clientHeight);
     return () => {
       el.removeEventListener("scroll", onScroll);
+      if (scrollRafRef.current !== undefined) {
+        window.cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = undefined;
+      }
       ro.disconnect();
     };
   }, [interactive]);
@@ -306,7 +323,7 @@ export default function FormatPanel({
                   }}
                   onKeyDown={onSearchKey}
                   aria-label={
-                    q && matches.length > 0
+                    sq && matches.length > 0
                       ? `搜索格式化结果，当前第 ${currentIdx + 1} / ${matches.length} 处`
                       : "搜索格式化结果"
                   }
