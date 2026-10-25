@@ -144,11 +144,15 @@ export default function FormatPanel({
   const currentIdx = matches.length === 0 ? -1 : Math.min(Math.max(currentMatch, 0), matches.length - 1);
   const currentLine = currentIdx >= 0 ? matches[currentIdx] : -1;
 
-  // 新内容到达后重置折叠与搜索位置（行号含义已变）
+  // 新内容到达后重置折叠、搜索位置与滚动窗口（行号含义已变）。
+  // 若滚动容器曾被卸载（清空/报错/超长行降级），浏览器夹取 el.scrollTop
+  // 不会补发 scroll 事件，state 残留会把虚拟窗口停在新内容之外（面板空白）
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 新内容必须清掉旧折叠状态
     setCollapsed(new Set());
     setCurrentMatch(0);
+    setScrollTop(0);
+    containerRef.current?.scrollTo?.(0, 0);
   }, [pretty]);
 
   // 虚拟滚动：监听滚动与容器尺寸（滚动经 rAF 节流，每帧至多重算一次窗口）
@@ -269,8 +273,8 @@ export default function FormatPanel({
     "--gutter-w": `${String(lines.length).length + 1}ch`,
   } as CSSProperties;
 
-  // 虚拟窗口
-  const start = Math.max(0, Math.floor(scrollTop / ROW_H) - 8);
+  // 虚拟窗口；start 兜底夹取到末行，防 state 残留时 slice 出空数组
+  const start = Math.max(0, Math.min(Math.floor(scrollTop / ROW_H) - 8, rows.length - 1));
   const end = Math.min(rows.length, Math.ceil((scrollTop + viewportH) / ROW_H) + 8);
   const visible = rows.slice(start, end);
 
@@ -360,20 +364,23 @@ export default function FormatPanel({
                 onClick={() => gotoMatch(1)}
                 disabled={matches.length === 0}
               />
-              <select
-                className={`formatsel${target !== "auto" ? " converting" : ""}`}
-                value={target}
-                onChange={(e) => onTargetChange(e.target.value as FormatTarget)}
-                title="输出格式（转换）"
-                aria-label="输出格式"
-              >
-                {TARGET_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
             </>
+          )}
+          {/* 转换失败（error）时也要能切回目标格式，故跟 response 走而不是 pretty */}
+          {response && (
+            <select
+              className={`formatsel${target !== "auto" ? " converting" : ""}`}
+              value={target}
+              onChange={(e) => onTargetChange(e.target.value as FormatTarget)}
+              title="输出格式（转换）"
+              aria-label="输出格式"
+            >
+              {TARGET_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           )}
           {interactive && foldCount > 0 && (
             <>

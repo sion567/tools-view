@@ -23,6 +23,7 @@ import "@xyflow/react/dist/style.css";import {
   type GraphNode,
   type GraphNodeData,
 } from "../lib/graph";
+import { parseEnum, usePersistentState } from "../lib/usePersistentState";
 import {
   IconColumns,
   IconMaximize,
@@ -87,7 +88,13 @@ function GraphInner({
   fullscreen?: boolean;
   onToggleFullscreen?: () => void;
 }) {
-  const [direction, setDirection] = useState<Direction>("vertical");
+  // 方向持久化：面板会随数据清空而卸载，普通 state 会悄悄重置回纵向
+  const [direction, setDirection] = usePersistentState<Direction>(
+    "tools-view.graphDirection",
+    "vertical",
+    parseEnum<Direction>(["vertical", "horizontal"]),
+    String,
+  );
   const [downloading, setDownloading] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
   const [copiedNote, setCopiedNote] = useState<string | null>(null);
@@ -111,6 +118,27 @@ function GraphInner({
       fitView({ padding: 0.12, maxZoom: 1.2, duration: 200 });
     });
   }, [baseNodes, baseEdges, direction, fitView, setNodes, setEdges]);
+
+  // 面板尺寸变化（全屏/并排切换、分栏拖拽、窗口缩放）后重新适配视图：
+  // React Flow 内部对容器尺寸的感知有自己的 ResizeObserver，直接在 props 变化的
+  // 同一帧 fitView 会拿到旧尺寸，因此监听容器自身并在尺寸稳定后（防抖）再适配；
+  // hidden 期间容器无尺寸，跳过
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || hidden) return;
+    let timer: number | undefined;
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        fitView({ padding: 0.12, maxZoom: 1.2, duration: 200 });
+      }, 80);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [hidden, fitView]);
 
   // 搜索命中：命中的节点高亮，未命中淡化；无搜索时保持原数组（避免无谓重渲染）
   const displayNodes = useMemo(() => {
