@@ -3,6 +3,7 @@ import {
   allFoldLines,
   buildFoldTree,
   countFolds,
+  expandToLine,
   type FoldNode,
 } from "../fold";
 
@@ -157,5 +158,16 @@ describe("fold: 工具函数", () => {
 
   it("空输入无折叠块", () => {
     expect(buildFoldTree("", "yaml")).toHaveLength(0);
+  });
+
+  it("expandToLine 展开包含目标行的折叠链，其余保持", () => {
+    const pretty = JSON.stringify({ a: { b: { c: 1 } } }, null, 2);
+    const tree = buildFoldTree(pretty, "json");
+    // "c": 1 在第 3 行，位于 root/a/b 三层嵌套块内，全部应被展开
+    const out = expandToLine(tree, 3, new Set(allFoldLines(tree)));
+    expect([...out]).toHaveLength(0);
+    // 目标行不在任何折叠体内时返回原 Set 引用（避免无谓重渲染）
+    const empty = new Set<number>();
+    expect(expandToLine(tree, 0, empty)).toBe(empty);
   });
 });

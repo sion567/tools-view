@@ -31,6 +31,13 @@ import {
   planBands,
   rasterize,
 } from "../lib/graphExport";
+import {
+  IconColumns,
+  IconMaximize,
+  IconPng,
+  IconSvg,
+  IconButton,
+} from "./icons";
 import type { Theme } from "../lib/theme";
 
 /** 节点数超过此值时隐藏小地图（其渲染所有节点，大图时开销大） */
@@ -222,27 +229,23 @@ function GraphInner({
               横向
             </button>
           </div>
-          <button
-            className="btn"
-            disabled={!hasGraph || downloading}
+          <IconButton
+            icon={<IconPng />}
+            label="下载 PNG"
             onClick={() => download("png")}
-          >
-            下载 PNG
-          </button>
-          <button
-            className="btn"
             disabled={!hasGraph || downloading}
+          />
+          <IconButton
+            icon={<IconSvg />}
+            label="下载 SVG"
             onClick={() => download("svg")}
-          >
-            下载 SVG
-          </button>
-          <button
-            className="btn"
+            disabled={!hasGraph || downloading}
+          />
+          <IconButton
+            icon={fullscreen ? <IconColumns /> : <IconMaximize />}
+            label={fullscreen ? "恢复并排显示（Ctrl+1）" : "全屏显示此面板（Ctrl+3）"}
             onClick={onToggleFullscreen}
-            title={fullscreen ? "恢复并排显示（Ctrl+1）" : "全屏显示此面板（Ctrl+3）"}
-          >
-            {fullscreen ? "并排" : "全屏"}
-          </button>
+          />
         </div>
       </header>
       <div className="panel-body">

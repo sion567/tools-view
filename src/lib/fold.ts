@@ -149,3 +149,25 @@ export function allFoldLines(nodes: FoldNode[], out: number[] = []): number[] {
   }
   return out;
 }
+
+/**
+ * 展开包含 line 的所有折叠块（搜索导航跳到折叠体内的命中行时用）。
+ * 无需展开时返回原 Set 引用，避免无谓重渲染。
+ */
+export function expandToLine(
+  nodes: FoldNode[],
+  line: number,
+  collapsed: Set<number>,
+): Set<number> {
+  const next = new Set(collapsed);
+  const walk = (list: FoldNode[]) => {
+    for (const n of list) {
+      if (n.line < line && line <= n.end) {
+        next.delete(n.line);
+        walk(n.children);
+      }
+    }
+  };
+  walk(nodes);
+  return next.size === collapsed.size ? collapsed : next;
+}

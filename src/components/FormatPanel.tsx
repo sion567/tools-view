@@ -4,16 +4,30 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
   allFoldLines,
   buildFoldTree,
   countFolds,
+  expandToLine,
   type FoldNode,
 } from "../lib/fold";
 import { saveTextFile } from "../lib/parse";
 import type { Format, FormatTarget, ParseResponse } from "../lib/types";
+import {
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconCollapseAll,
+  IconColumns,
+  IconCopy,
+  IconExpandAll,
+  IconMaximize,
+  IconSave,
+  IconButton,
+} from "./icons";
 
 /** 虚拟滚动的固定行高（与 .pretty-lines 的 line-height 一致） */
 const ROW_H = 20;
@@ -43,7 +57,7 @@ interface Row {
   hiddenCount?: number;
 }
 
-/** 命中关键字高亮 */
+/** 命中关键字高亮（浏览器式：全文保留，只做标记） */
 function Highlight({ text, q }: { text: string; q: string }) {
   if (!q) return <>{text}</>;
   const lower = text.toLowerCase();
@@ -90,8 +104,9 @@ export default function FormatPanel({
   onToggleFullscreen,
 }: FormatPanelProps) {
   const [copied, setCopied] = useState(false);
-  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+  const [currentMatch, setCurrentMatch] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(400);
   const [flash, setFlash] = useState<{ line: number; ts: number } | null>(null);
@@ -111,10 +126,23 @@ export default function FormatPanel({
   const foldCount = useMemo(() => countFolds(folds), [folds]);
   const interactive = lines.length > 0 && lines.length <= FOLD_MAX_LINES;
 
-  // 新内容到达后重置折叠状态（行号含义已变）
+  // 浏览器式搜索：全文里所有命中行（不改变展示内容）
+  const matches = useMemo(() => {
+    if (!q) return [] as number[];
+    const out: number[] = [];
+    lines.forEach((text, i) => {
+      if (text.toLowerCase().includes(q)) out.push(i);
+    });
+    return out;
+  }, [lines, q]);
+  const currentIdx = matches.length === 0 ? -1 : Math.min(Math.max(currentMatch, 0), matches.length - 1);
+  const currentLine = currentIdx >= 0 ? matches[currentIdx] : -1;
+
+  // 新内容到达后重置折叠与搜索位置（行号含义已变）
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 新内容必须清掉旧折叠状态
     setCollapsed(new Set());
+    setCurrentMatch(0);
   }, [pretty]);
 
   // 虚拟滚动：监听滚动与容器尺寸
@@ -143,16 +171,9 @@ export default function FormatPanel({
   const collapseAll = () => setCollapsed(new Set(allFoldLines(folds)));
   const expandAll = () => setCollapsed(new Set());
 
+  // 完整的折叠结构视图（搜索时也不过滤，仅高亮）
   const rows = useMemo<Row[]>(() => {
     if (!interactive) return [];
-    if (q) {
-      // 搜索态：忽略折叠结构，仅显示命中行
-      const out: Row[] = [];
-      lines.forEach((text, i) => {
-        if (text.toLowerCase().includes(q)) out.push({ line: i });
-      });
-      return out;
-    }
     const out: Row[] = [];
     // 渲染 lines[from, to) 区间，nodes 是区间内按行序排列的折叠块
     const walk = (from: number, to: number, nodes: FoldNode[]) => {
@@ -180,7 +201,7 @@ export default function FormatPanel({
     };
     walk(0, lines.length, folds);
     return out;
-  }, [lines, folds, collapsed, interactive, q]);
+  }, [lines, folds, collapsed, interactive]);
 
   // 图线区节点定位：滚动到目标行并闪烁
   useEffect(() => {
@@ -199,6 +220,33 @@ export default function FormatPanel({
     const t = window.setTimeout(() => setFlash(null), 1800);
     return () => window.clearTimeout(t);
   }, [flash]);
+
+  // 搜索导航：当前命中行如果藏在折叠块里，自动展开并滚动到可视区
+  useEffect(() => {
+    if (currentLine < 0 || !interactive) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 导航到折叠体内的命中行需要先展开
+    setCollapsed((prev) => expandToLine(folds, currentLine, prev));
+    const rowIndex = rows.findIndex((r) => r.line === currentLine);
+    if (rowIndex >= 0) {
+      const el = containerRef.current;
+      if (el) el.scrollTo({ top: Math.max(0, rowIndex * ROW_H - el.clientHeight / 2) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLine, rows]);
+
+  const gotoMatch = (delta: number) => {
+    if (matches.length === 0) return;
+    setCurrentMatch((i) => (Math.min(Math.max(i, 0), matches.length - 1) + delta + matches.length) % matches.length);
+  };
+
+  const onSearchKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      gotoMatch(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      onQueryChange("");
+    }
+  };
 
   const gutterStyle = {
     "--gutter-w": `${String(lines.length).length + 1}ch`,
@@ -224,8 +272,8 @@ export default function FormatPanel({
     if (!pretty || !outFormat) return;
     const r = await saveTextFile(pretty, `tools-view.${outFormat}`);
     if (r === "saved") {
-      setSavedNote("已保存");
-      setTimeout(() => setSavedNote(null), 1500);
+      setSavedNote(true);
+      setTimeout(() => setSavedNote(false), 1500);
     }
   };
 
@@ -233,72 +281,115 @@ export default function FormatPanel({
     <section className={`panel format-panel${hidden ? " panel-hidden" : ""}`}>
       <header className="panel-header">
         <span className="panel-title">格式化区</span>
-        {format && <span className={`badge fmt-${format}`}>{format.toUpperCase()}</span>}
-        {target !== "auto" && outFormat && outFormat !== format && (
-          <span className={`badge fmt-${outFormat}`}>→ {outFormat.toUpperCase()}</span>
+        {format && (
+          <span className={`badge fmt-${target !== "auto" && outFormat ? outFormat : format}`}>
+            {target !== "auto" && outFormat && outFormat !== format
+              ? `${format.toUpperCase()}→${outFormat.toUpperCase()}`
+              : format.toUpperCase()}
+          </span>
         )}
         {lines.length > FOLD_MAX_LINES && (
           <span className="badge muted">超 {FOLD_MAX_LINES} 行，折叠视图已停用</span>
         )}
         <div className="panel-actions">
           {pretty && (
-            <input
-              className="search"
-              type="search"
-              placeholder="搜索…"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-              aria-label="搜索格式化结果"
-            />
-          )}
-          {q && <span className="badge muted">{rows.length} 处</span>}
-          {pretty && (
-            <select
-              className="formatsel"
-              value={target}
-              onChange={(e) => onTargetChange(e.target.value as FormatTarget)}
-              title="输出格式（转换）"
-              aria-label="输出格式"
-            >
-              {TARGET_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {interactive && !q && foldCount > 0 && (
             <>
-              <button className="btn" onClick={collapseAll}>
-                全部折叠
-              </button>
-              <button
-                className="btn"
-                onClick={expandAll}
-                disabled={collapsed.size === 0}
+              <div className="search-wrap">
+                <input
+                  className="search"
+                  type="search"
+                  placeholder="搜索…"
+                  value={query}
+                  onChange={(e) => {
+                    onQueryChange(e.target.value);
+                    setCurrentMatch(0);
+                  }}
+                  onKeyDown={onSearchKey}
+                  aria-label={
+                    q && matches.length > 0
+                      ? `搜索格式化结果，当前第 ${currentIdx + 1} / ${matches.length} 处`
+                      : "搜索格式化结果"
+                  }
+                />
+                {q && (
+                  <>
+                    <span className="search-count" aria-hidden="true">
+                      {matches.length > 0 ? `${currentIdx + 1}/${matches.length}` : "0"}
+                    </span>
+                    <button
+                      type="button"
+                      className="search-clear"
+                      aria-label="清空搜索"
+                      title="清空搜索"
+                      onClick={() => {
+                        onQueryChange("");
+                        setCurrentMatch(0);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </div>
+              <IconButton
+                icon={<IconChevronUp />}
+                label="上一个匹配（Shift+Enter）"
+                onClick={() => gotoMatch(-1)}
+                disabled={matches.length === 0}
+              />
+              <IconButton
+                icon={<IconChevronDown />}
+                label="下一个匹配（Enter）"
+                onClick={() => gotoMatch(1)}
+                disabled={matches.length === 0}
+              />
+              <select
+                className={`formatsel${target !== "auto" ? " converting" : ""}`}
+                value={target}
+                onChange={(e) => onTargetChange(e.target.value as FormatTarget)}
+                title="输出格式（转换）"
+                aria-label="输出格式"
               >
-                全部展开
-              </button>
+                {TARGET_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </>
           )}
-          <button className="btn" onClick={copy} disabled={!pretty}>
-            {copied ? "已复制" : "复制"}
-          </button>
-          <button
-            className="btn"
+          {interactive && foldCount > 0 && (
+            <>
+              <IconButton
+                icon={<IconCollapseAll />}
+                label="全部折叠"
+                onClick={collapseAll}
+              />
+              <IconButton
+                icon={<IconExpandAll />}
+                label="全部展开"
+                onClick={expandAll}
+                disabled={collapsed.size === 0}
+              />
+            </>
+          )}
+          <IconButton
+            icon={copied ? <IconCheck /> : <IconCopy />}
+            label={copied ? "已复制" : "复制格式化结果"}
+            onClick={copy}
+            disabled={!pretty}
+          />
+          <IconButton
+            icon={savedNote ? <IconCheck /> : <IconSave />}
+            label={savedNote ? "已保存" : "保存到文件"}
             onClick={save}
             disabled={!pretty || !outFormat}
-            title="保存到文件"
-          >
-            {savedNote ?? "保存"}
-          </button>
-          <button
-            className="btn"
+          />
+          <IconButton
+            icon={fullscreen ? <IconColumns /> : <IconMaximize />}
+            label={fullscreen ? "恢复并排显示（Ctrl+1）" : "全屏显示此面板（Ctrl+2）"}
             onClick={onToggleFullscreen}
-            title={fullscreen ? "恢复并排显示（Ctrl+1）" : "全屏显示此面板（Ctrl+2）"}
-          >
-            {fullscreen ? "并排" : "全屏"}
-          </button>
+          />
         </div>
       </header>
       <div className="panel-body">
@@ -308,7 +399,7 @@ export default function FormatPanel({
             <div className="error-message">{error.message}</div>
             {(error.line !== null || error.column !== null) && (
               <button
-                className="error-pos error-jump"
+                className="error-jump error-pos"
                 onClick={() => error.line != null && onLocateEditor(error.line)}
                 disabled={error.line == null}
                 title="点击定位到输入区对应行"
@@ -330,7 +421,9 @@ export default function FormatPanel({
                 <div style={{ transform: `translateY(${start * ROW_H}px)` }}>
                   {visible.map((r) => (
                     <div
-                      className={`pl-row${r.line === flash?.line ? " pl-flash" : ""}`}
+                      className={`pl-row${r.line === flash?.line ? " pl-flash" : ""}${
+                        r.line === currentLine ? " pl-current" : ""
+                      }`}
                       key={r.line}
                     >
                       <span className="pl-gutter">{r.line + 1}</span>

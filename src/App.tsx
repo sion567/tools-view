@@ -9,6 +9,7 @@ import {
 import InputPanel from "./components/InputPanel";
 import FormatPanel from "./components/FormatPanel";
 import GraphPanel from "./components/GraphPanel";
+import HelpModal from "./components/HelpModal";
 import { buildLinkage } from "./lib/linkage";
 import { parseText, readTextFile } from "./lib/parse";
 import { SAMPLES } from "./lib/samples";
@@ -25,8 +26,13 @@ type BottomView = "split" | "format" | "graph";
 
 const MIN_INPUT = 140;
 const MIN_BOTTOM = 280;
-const MIN_FMT = 240;
+/** 格式化区最小宽度：保证工具栏在转换态（JSON→XML 组合徽标）也单行放下 */
+const MIN_FMT = 640;
 const MIN_GRAPH = 320;
+/** 竖向拖拽夹取时扣除 app 内边距与分割条（10×2 + 8 + 余量） */
+const COL_CHROME = 40;
+const clampFmt = (w: number, innerW: number) =>
+  Math.min(Math.max(w, MIN_FMT), Math.max(innerW - MIN_GRAPH - COL_CHROME, MIN_FMT));
 
 const parseView = parseEnum(["split", "format", "graph"] as const);
 
@@ -41,6 +47,7 @@ export default function App() {
   const [locate, setLocate] = useState<{ line: number; ts: number } | null>(null);
   /** 输入区定位请求（点击错误位置） */
   const [editorLocate, setEditorLocate] = useState<{ line: number; ts: number } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
   const seqRef = useRef(0);
   const lastKeyRef = useRef<string | null>(null);
@@ -55,7 +62,7 @@ export default function App() {
   );
   const [fmtWidth, setFmtWidth] = usePersistentState(
     "tools-view.fmtWidth",
-    Math.round(window.innerWidth * 0.34),
+    clampFmt(Math.round(window.innerWidth * 0.45), window.innerWidth),
     parsePositiveInt,
     String,
   );
@@ -124,6 +131,15 @@ export default function App() {
   }, [handleFormatClick]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F1") {
+        e.preventDefault();
+        setHelpOpen((v) => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        setHelpOpen(false);
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "enter") {
@@ -196,9 +212,8 @@ export default function App() {
     e.preventDefault();
     const startX = e.clientX;
     const startW = fmtWidth;
-    const max = window.innerWidth - MIN_GRAPH;
     const move = (ev: PointerEvent) => {
-      setFmtWidth(Math.min(Math.max(startW + ev.clientX - startX, MIN_FMT), max));
+      setFmtWidth(clampFmt(startW + ev.clientX - startX, window.innerWidth));
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -216,9 +231,7 @@ export default function App() {
       setInputHeight((h) =>
         Math.min(Math.max(h, MIN_INPUT), Math.max(window.innerHeight - MIN_BOTTOM, MIN_INPUT)),
       );
-      setFmtWidth((w) =>
-        Math.min(Math.max(w, MIN_FMT), Math.max(window.innerWidth - MIN_GRAPH, MIN_FMT)),
-      );
+      setFmtWidth((w) => clampFmt(w, window.innerWidth));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -259,10 +272,7 @@ export default function App() {
     Math.max(inputHeight, MIN_INPUT),
     Math.max(window.innerHeight - MIN_BOTTOM, MIN_INPUT),
   );
-  const effectiveFmtWidth = Math.min(
-    Math.max(fmtWidth, MIN_FMT),
-    Math.max(window.innerWidth - MIN_GRAPH, MIN_FMT),
-  );
+  const effectiveFmtWidth = clampFmt(fmtWidth, window.innerWidth);
 
   return (
     <main
@@ -279,6 +289,7 @@ export default function App() {
         onFormatClick={handleFormatClick}
         onClear={handleClear}
         onSample={handleSample}
+        onOpenHelp={() => setHelpOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
       />
@@ -333,6 +344,7 @@ export default function App() {
           }
         />
       </div>
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </main>
   );
 }

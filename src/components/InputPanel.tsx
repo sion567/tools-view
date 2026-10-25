@@ -20,6 +20,7 @@ import { json } from "@codemirror/lang-json";
 import { yaml } from "@codemirror/lang-yaml";
 import { xml } from "@codemirror/lang-xml";
 import { editorTheme } from "../lib/editorTheme";
+import { IconFormat, IconHelp, IconSample, IconTrash, IconButton } from "./icons";
 import type { Format } from "../lib/types";
 import type { Theme } from "../lib/theme";
 
@@ -60,6 +61,7 @@ interface InputPanelProps {
   onFormatClick: () => void;
   onClear: () => void;
   onSample: () => void;
+  onOpenHelp: () => void;
   theme: Theme;
   onToggleTheme: () => void;
 }
@@ -74,6 +76,7 @@ export default function InputPanel({
   onFormatClick,
   onClear,
   onSample,
+  onOpenHelp,
   theme,
   onToggleTheme,
 }: InputPanelProps) {
@@ -226,15 +229,14 @@ export default function InputPanel({
           {badge}
         </span>
         <div className="panel-actions">
-          <button className="btn primary" onClick={onFormatClick} title="Ctrl+Enter">
-            格式化
-          </button>
-          <button className="btn" onClick={onSample}>
-            示例
-          </button>
-          <button className="btn" onClick={onClear} title="Ctrl+L">
-            清空
-          </button>
+          <IconButton
+            icon={<IconFormat />}
+            label="格式化（Ctrl+Enter）"
+            onClick={onFormatClick}
+            primary
+          />
+          <IconButton icon={<IconSample />} label="载入示例数据" onClick={onSample} />
+          <IconButton icon={<IconTrash />} label="清空（Ctrl+L）" onClick={onClear} />
           <button
             className="btn icon"
             onClick={onToggleTheme}
@@ -243,6 +245,7 @@ export default function InputPanel({
           >
             {theme === "dark" ? "☀" : "☾"}
           </button>
+          <IconButton icon={<IconHelp />} label="帮助与快捷键（F1）" onClick={onOpenHelp} />
         </div>
       </header>
       <div className="panel-body editor-host" ref={containerRef} />
